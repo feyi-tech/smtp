@@ -134,11 +134,16 @@ class StaticProjectTests(unittest.TestCase):
 
     def test_host_script_can_update_and_recreate(self):
         script = (ROOT / "mailstack.sh").read_text()
+        apply_saved = (ROOT / "docker/rootfs/usr/local/bin/mailstack-apply-saved").read_text()
         self.assertIn("update_project_files()", script)
         self.assertIn("git pull --ff-only", script)
         self.assertIn("refresh_project_archive()", script)
+        self.assertIn("reapply_saved_setup()", script)
+        self.assertIn("mailstack-apply-saved", script)
         self.assertIn("update)", script)
         self.assertIn("compose up -d --build --force-recreate", script)
+        self.assertIn("subprocess.call", apply_saved)
+        self.assertIn("/opt/mailstack/setup/apply_config.py", apply_saved)
         self.assertIn("install|up|update|url|status|logs|down|destroy --yes", script)
 
 

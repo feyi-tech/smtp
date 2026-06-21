@@ -515,6 +515,14 @@ print_setup_url() {
   echo "Keep this URL private. It is passwordless and controls the mail-stack setup."
 }
 
+reapply_saved_setup() {
+  log "Reapplying saved MailStack setup"
+  if ! compose exec -T mail mailstack-apply-saved; then
+    echo "Saved setup reapply failed. Check logs with: ./mailstack.sh logs"
+    exit 1
+  fi
+}
+
 case "${1:-up}" in
   up|install)
     ensure_project_files
@@ -535,6 +543,7 @@ case "${1:-up}" in
     ensure_docker
     log "Rebuilding and recreating MailStack"
     compose up -d --build --force-recreate
+    reapply_saved_setup
     log "Setup link"
     print_setup_url
     ;;

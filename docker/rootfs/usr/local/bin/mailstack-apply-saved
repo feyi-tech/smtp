@@ -1,0 +1,36 @@
+#!/usr/bin/env python3
+import sqlite3
+import subprocess
+import sys
+from pathlib import Path
+
+DB_PATH = Path("/data/state/mailstack.db")
+APPLY = Path("/opt/mailstack/setup/apply_config.py")
+REQUIRED = ["mail_hostname", "roundcube_domain", "postfixadmin_domain", "admin_email"]
+
+
+def main() -> int:
+    if not DB_PATH.exists():
+        print("No saved MailStack setup found; skipping setup reapply.")
+        return 0
+
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        rows = dict(conn.execute("SELECT key, value FROM settings").fetchall())
+        conn.close()
+    except sqlite3.Error as exc:
+        print(f"Saved MailStack setup could not be read: {exc}")
+        return 1
+
+    missing = [key for key in REQUIRED if not rows.get(key)]
+    if missing:
+        print("Saved MailStack setup is incomplete; skipping setup reapply.")
+        print("Missing: " + ", ".join(missing))
+        return 0
+
+    print("Reapplying saved MailStack setup after container recreate.")
+    return subprocess.call(["/usr/bin/python3", str(APPLY)])
+
+
+if __name__ == "__main__":
+    sys.exit(main())
