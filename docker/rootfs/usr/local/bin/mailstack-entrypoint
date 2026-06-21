@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+install -d -m 700 /data/state
+install -d -m 755 /run/mysqld /run/php /var/vmail /etc/opendkim/keys
+chown -R mysql:mysql /run/mysqld /var/lib/mysql
+
+if ! getent group vmail >/dev/null; then
+  groupadd -g 5000 vmail
+fi
+
+if ! getent passwd vmail >/dev/null; then
+  useradd -u 5000 -g vmail -s /usr/sbin/nologin -d /var/vmail vmail
+fi
+
+chown -R vmail:vmail /var/vmail
+
+if [ ! -s /data/state/setup.token ]; then
+  umask 077
+  openssl rand -hex 32 > /data/state/setup.token
+fi
+
+if [ ! -d /var/lib/mysql/mysql ]; then
+  mariadb-install-db --user=mysql --datadir=/var/lib/mysql >/dev/null
+fi
+
+if [ ! -f /etc/opendkim/key.table ]; then
+  touch /etc/opendkim/key.table /etc/opendkim/signing.table /etc/opendkim/trusted.hosts
+  chown -R opendkim:opendkim /etc/opendkim
+fi
+
+for HOST in 127.0.0.1 ::1 localhost; do
+  grep -Fxq "$HOST" /etc/opendkim/trusted.hosts 2>/dev/null || echo "$HOST" >> /etc/opendkim/trusted.hosts
+done
+chown opendkim:opendkim /etc/opendkim/trusted.hosts
+
+if ! grep -q '^Socket inet:8891@127.0.0.1' /etc/opendkim.conf 2>/dev/null; then
+  cat >/etc/opendkim.conf <<'EOF'
+Syslog yes
+UMask 002
+Mode sv
+Canonicalization relaxed/simple
+Socket inet:8891@127.0.0.1
+KeyTable /etc/opendkim/key.table
+SigningTable refile:/etc/opendkim/signing.table
+ExternalIgnoreList /etc/opendkim/trusted.hosts
+InternalHosts /etc/opendkim/trusted.hosts
+EOF
+fi
+
+cat >/etc/nginx/sites-available/default <<'EOF'
+server {
+    listen 80 default_server;
+    server_name _;
+
+    root /var/www/roundcube/public_html;
+    index index.php index.html;
+
+    location / {
+        try_files $uri $uri/ /index.php;
+    }
+
+    location ^~ /postfixadmin/ {
+        alias /var/www/postfixadmin/public/;
+        index index.php;
+        try_files $uri $uri/ /postfixadmin/index.php;
+    }
+
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/run/php/php-fpm.sock;
+    }
+}
+EOF
+
+echo ""
+echo "MailStack container is starting."
+echo "Run ./mailstack.sh url on the host to print the passwordless setup link."
+echo ""
+
+exec "$@"

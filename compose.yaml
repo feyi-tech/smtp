@@ -1,0 +1,35 @@
+services:
+  mail:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: feyitech/mailstack:local
+    container_name: mailstack
+    hostname: mailstack
+    restart: unless-stopped
+    init: true
+    ports:
+      - "25:25"
+      - "465:465"
+      - "587:587"
+      - "143:143"
+      - "993:993"
+      - "80:80"
+      - "443:443"
+      - "${MAILSTACK_SETUP_PORT:-8080}:8080"
+    volumes:
+      - mailstack_state:/data
+      - mailstack_mysql:/var/lib/mysql
+      - mailstack_vmail:/var/vmail
+      - mailstack_dkim:/etc/opendkim/keys
+      - mailstack_letsencrypt:/etc/letsencrypt
+    environment:
+      TZ: "${TZ:-UTC}"
+      MAILSTACK_PUBLIC_HOST: "${MAILSTACK_PUBLIC_HOST:-}"
+
+volumes:
+  mailstack_state:
+  mailstack_mysql:
+  mailstack_vmail:
+  mailstack_dkim:
+  mailstack_letsencrypt:

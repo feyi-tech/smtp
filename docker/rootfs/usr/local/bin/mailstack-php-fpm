@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PHP_FPM=$(command -v php-fpm || true)
+if [ -z "$PHP_FPM" ]; then
+  PHP_FPM=$(find /usr/sbin -maxdepth 1 -name 'php-fpm*' | sort -V | tail -n 1)
+fi
+
+if [ -z "$PHP_FPM" ]; then
+  echo "php-fpm not found"
+  exit 1
+fi
+
+POOL_DIR=$(find /etc/php -type d -path '*/fpm/pool.d' | sort -V | tail -n 1)
+if [ -n "$POOL_DIR" ] && [ -f "$POOL_DIR/www.conf" ]; then
+  sed -i 's|^listen = .*|listen = /run/php/php-fpm.sock|' "$POOL_DIR/www.conf"
+  sed -i 's|^;*clear_env = .*|clear_env = no|' "$POOL_DIR/www.conf"
+fi
+
+exec "$PHP_FPM" -F

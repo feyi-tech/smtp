@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+while true; do
+  if mysqladmin ping -uroot --silent >/dev/null 2>&1 \
+    && mysql -uroot -N -e "SHOW DATABASES LIKE 'postfixadmin'" 2>/dev/null | grep -q postfixadmin; then
+    mysql -uroot postfixadmin -N -e "SELECT domain FROM domain WHERE active = 1" 2>/dev/null | while read -r DOMAIN; do
+      if [ -n "$DOMAIN" ] && [ "$DOMAIN" != "ALL" ]; then
+        mailstack-dkim-domain "$DOMAIN" >/dev/null 2>&1 || true
+      fi
+    done
+  fi
+  sleep 60
+done
