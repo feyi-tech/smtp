@@ -81,6 +81,14 @@ class StaticProjectTests(unittest.TestCase):
         self.assertIn("roundcube_db_password", apply_config)
         self.assertIn("php_crypt:BLOWFISH:12:{{BLF-CRYPT}}", apply_config)
 
+    def test_roundcube_uses_secure_local_mail_connections(self):
+        apply_config = (ROOT / "docker/rootfs/opt/mailstack/setup/apply_config.py").read_text()
+        self.assertIn("$config['imap_host'] = 'ssl://127.0.0.1:993';", apply_config)
+        self.assertIn("$config['smtp_host'] = 'tls://127.0.0.1:587';", apply_config)
+        self.assertIn("$config['imap_conn_options']", apply_config)
+        self.assertIn("$config['smtp_conn_options']", apply_config)
+        self.assertIn("'allow_self_signed' => true", apply_config)
+
     def test_dkim_public_txt_is_readable_by_web_ui(self):
         dkim = (ROOT / "docker/rootfs/usr/local/bin/mailstack-dkim-domain").read_text()
         setup = (ROOT / "docker/rootfs/opt/mailstack/setup/server.py").read_text()
