@@ -293,8 +293,9 @@ def setup_form(t: str, message: str = "") -> tuple[int, bytes]:
 
 
 def parse_dkim_txt(raw: str) -> str:
-    compact = " ".join(line.strip() for line in raw.splitlines() if "DKIM1" in line or "p=" in line)
-    compact = compact.replace('"', "").replace("(", "").replace(")", "").replace("\t", " ")
+    chunks = re.findall(r'"([^"]*)"', raw)
+    compact = "".join(chunks) if chunks else " ".join(line.strip() for line in raw.splitlines() if "DKIM1" in line or "p=" in line)
+    compact = compact.replace("(", "").replace(")", "").replace("\t", " ")
     compact = " ".join(compact.split())
     if "p=" not in compact:
         return ""

@@ -39,9 +39,15 @@ function mailstack_dkim_value($domain) {
     if ($path === '') {
         return '';
     }
-    $raw = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-    $joined = implode(' ', $raw);
-    $joined = str_replace(array('"', '(', ')', "\t"), '', $joined);
+    $text = file_get_contents($path);
+    $chunks = array();
+    if (preg_match_all('/"([^"]*)"/', $text, $matches)) {
+        $joined = implode('', $matches[1]);
+    } else {
+        $raw = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        $joined = implode(' ', $raw);
+    }
+    $joined = str_replace(array('(', ')', "\t"), '', $joined);
     $joined = preg_replace('/\s+/', ' ', $joined);
     if (strpos($joined, 'v=DKIM1') !== false) {
         $parts = explode('TXT', $joined, 2);

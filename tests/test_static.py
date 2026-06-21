@@ -1,4 +1,5 @@
 import ast
+import importlib.util
 import unittest
 from pathlib import Path
 
@@ -103,12 +104,23 @@ class StaticProjectTests(unittest.TestCase):
         dkim = (ROOT / "docker/rootfs/usr/local/bin/mailstack-dkim-domain").read_text()
         setup = (ROOT / "docker/rootfs/opt/mailstack/setup/server.py").read_text()
         apply_config = (ROOT / "docker/rootfs/opt/mailstack/setup/apply_config.py").read_text()
+        patch = (ROOT / "docker/rootfs/opt/mailstack/postfixadmin/patch_dns_page.py").read_text()
         self.assertIn("/data/state/dkim", dkim)
         self.assertIn("cp \"$KEY_DIR/$SELECTOR.txt\"", dkim)
         self.assertIn("chmod 644 \"$PUBLIC_DIR/$DOMAIN.$SELECTOR.txt\"", dkim)
         self.assertIn("chmod 711 /data/state", dkim)
         self.assertIn("/data/state/dkim", setup)
+        self.assertIn("preg_match_all", patch)
         self.assertIn("sync_dkim_domains", apply_config)
+
+    def test_dkim_parser_concatenates_txt_chunks(self):
+        path = ROOT / "docker/rootfs/opt/mailstack/setup/server.py"
+        spec = importlib.util.spec_from_file_location("mailstack_setup_server", path)
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        raw = 'default._domainkey IN TXT ( "v=DKIM1; h=sha256; k=rsa; " "p=abc" "def" ) ; comment'
+        self.assertEqual(module.parse_dkim_txt(raw), "v=DKIM1; h=sha256; k=rsa; p=abcdef")
 
     def test_dns_pages_have_domain_selector_and_copy_controls(self):
         server = (ROOT / "docker/rootfs/opt/mailstack/setup/server.py").read_text()
