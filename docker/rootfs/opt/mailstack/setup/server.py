@@ -316,10 +316,11 @@ def dkim_value_for(domain: str) -> str:
 
 def dns_records_for(domain: str, mail_hostname: str, public_ip: str) -> list[tuple[str, str, str, bool]]:
     dkim_value = dkim_value_for(domain)
+    spf_ip = public_ip or "YOUR_SERVER_IP"
     records = [
         ("A", mail_hostname, public_ip or "YOUR_SERVER_IP", False),
         ("MX", domain, f"10 {mail_hostname}", False),
-        ("TXT", domain, "v=spf1 mx a ~all", False),
+        ("TXT", domain, f"v=spf1 ip4:{spf_ip} mx ~all", False),
         (
             "TXT",
             f"default._domainkey.{domain}",

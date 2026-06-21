@@ -69,6 +69,7 @@ class StaticProjectTests(unittest.TestCase):
         self.assertIn("postfixadmin_domain", patch)
         self.assertIn("default._domainkey", patch)
         self.assertIn("v=DMARC1", patch)
+        self.assertIn("v=spf1 ip4:", patch)
         self.assertIn("domain-select", patch)
         self.assertIn("data-copy", patch)
         self.assertIn("copy-status", patch)
@@ -81,6 +82,14 @@ class StaticProjectTests(unittest.TestCase):
         self.assertIn("roundcube_db_password", apply_config)
         self.assertIn("roundcube_des_key", apply_config)
         self.assertIn("php_crypt:BLOWFISH:12:{{BLF-CRYPT}}", apply_config)
+
+    def test_postfix_chroot_gets_dns_files(self):
+        apply_config = (ROOT / "docker/rootfs/opt/mailstack/setup/apply_config.py").read_text()
+        entrypoint = (ROOT / "docker/rootfs/usr/local/bin/mailstack-entrypoint").read_text()
+        for content in [apply_config, entrypoint]:
+            self.assertIn("/var/spool/postfix/etc", content)
+            self.assertIn("resolv.conf", content)
+            self.assertIn("nsswitch.conf", content)
 
     def test_roundcube_uses_secure_local_mail_connections(self):
         apply_config = (ROOT / "docker/rootfs/opt/mailstack/setup/apply_config.py").read_text()

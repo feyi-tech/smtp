@@ -237,10 +237,20 @@ def write_file(path: str | Path, content: str, mode: int = 0o644) -> None:
     p.chmod(mode)
 
 
+def configure_postfix_chroot_dns() -> None:
+    target = Path("/var/spool/postfix/etc")
+    target.mkdir(parents=True, exist_ok=True)
+    for name in ["resolv.conf", "hosts", "nsswitch.conf", "services"]:
+        src = Path("/etc") / name
+        if src.exists():
+            shutil.copy2(src, target / name)
+
+
 def configure_postfix(settings: dict[str, str], sec: dict[str, str]) -> None:
     domain = mail_domain(settings)
     host = settings["mail_hostname"]
     dbpass = sec["postfixadmin_db_password"]
+    configure_postfix_chroot_dns()
 
     map_common = f"""user = postfixadmin
 password = {dbpass}

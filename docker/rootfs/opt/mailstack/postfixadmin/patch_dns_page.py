@@ -202,7 +202,7 @@ $serviceHosts = array_values(array_unique(array_filter(array($mailHost, $roundcu
             <tr>
               <td><span class="type-pill">TXT</span></td>
               <td><?php echo mailstack_copy_field($domain, 'record name'); ?></td>
-              <td><?php echo mailstack_copy_field('v=spf1 mx a ~all', 'record value'); ?></td>
+              <td><?php echo mailstack_copy_field('v=spf1 ip4:' . $publicIp . ' mx ~all', 'record value'); ?></td>
             </tr>
             <tr>
               <td><span class="type-pill">TXT</span></td>
