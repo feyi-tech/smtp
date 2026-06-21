@@ -100,7 +100,12 @@ class StaticProjectTests(unittest.TestCase):
             self.assertIn("domain-panel", content)
             self.assertIn("data-copy", content)
             self.assertIn("copy-field", content)
+            self.assertIn("copy-preview", content)
+            self.assertIn("text-overflow: ellipsis", content)
+            self.assertIn("table-layout: fixed", content)
             self.assertIn("Copied", content)
+        self.assertIn("preview_value", server)
+        self.assertIn("mailstack_preview", patch)
 
     def test_host_script_does_not_generate_mail_conf(self):
         script = (ROOT / "mailstack.sh").read_text()

@@ -218,18 +218,22 @@ def page(title: str, body: str, status: HTTPStatus = HTTPStatus.OK) -> tuple[int
       border-radius: 6px;
     }}
     table {{ width: 100%; border-collapse: collapse; background: var(--panel); }}
+    .dns-table {{ table-layout: fixed; }}
+    .dns-table th:first-child, .dns-table td:first-child {{ width: 74px; }}
+    .dns-table th:nth-child(2), .dns-table td:nth-child(2) {{ width: 34%; }}
     th, td {{ text-align: left; border-bottom: 1px solid var(--line); padding: 10px; vertical-align: top; }}
     th {{ color: #1f2937; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }}
     .panel-head {{ display: flex; align-items: end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }}
     .type-pill {{ display: inline-flex; min-width: 42px; justify-content: center; border: 1px solid var(--line); border-radius: 999px; padding: 3px 8px; font-weight: 800; font-size: 12px; background: #f8fafc; }}
-    .copy-field {{ width: 100%; display: inline-flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--ink); padding: 8px; text-align: left; cursor: pointer; }}
+    .copy-field {{ width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--ink); padding: 8px; text-align: left; cursor: pointer; }}
     .copy-field:hover, .copy-field:focus {{ border-color: var(--accent); background: #eef7fa; outline: none; }}
+    .copy-field code {{ display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
     .copy-icon {{ width: 18px; height: 18px; flex: 0 0 auto; color: var(--accent); }}
     .copy-icon svg {{ width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }}
-    .copy-status {{ display: none; color: var(--good); font-weight: 800; font-size: 12px; }}
+    .copy-status {{ display: none; flex: 0 0 auto; color: var(--good); font-weight: 800; font-size: 12px; }}
     .copy-field.is-copied .copy-status {{ display: inline; }}
     .copy-field.is-copied .copy-icon {{ display: none; }}
-    .missing-field {{ display: block; color: #9a5b00; background: #fff8e6; border: 1px solid #f3d08a; border-radius: 6px; padding: 10px; }}
+    .missing-field {{ display: block; color: #9a5b00; background: #fff8e6; border: 1px solid #f3d08a; border-radius: 6px; padding: 10px; overflow-wrap: anywhere; }}
     .ok {{ color: var(--good); font-weight: 700; }}
     .bad {{ color: var(--bad); font-weight: 700; }}
     .nav {{ display: flex; gap: 10px; flex-wrap: wrap; margin: 18px 0; }}
@@ -327,13 +331,20 @@ def dns_records_for(domain: str, mail_hostname: str, public_ip: str) -> list[tup
     return records
 
 
+def preview_value(value: str, limit: int = 96) -> str:
+    if len(value) <= limit:
+        return value
+    return value[: max(0, limit - 3)] + "..."
+
+
 def copy_field(value: str, label: str = "") -> str:
     safe_value = html.escape(value)
+    safe_preview = html.escape(preview_value(value))
     safe_label = html.escape(label or value)
     icon = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="10" height="10" rx="2"></rect><path d="M5 15V7a2 2 0 0 1 2-2h8"></path></svg>'
     return (
-        f'<button class="copy-field" type="button" data-copy="{safe_value}" aria-label="Copy {safe_label}">'
-        f"<code>{safe_value}</code><span class=\"copy-icon\">{icon}</span><span class=\"copy-status\">Copied</span></button>"
+        f'<button class="copy-field" type="button" data-copy="{safe_value}" title="{safe_value}" aria-label="Copy {safe_label}">'
+        f'<code class="copy-preview">{safe_preview}</code><span class="copy-icon">{icon}</span><span class="copy-status">Copied</span></button>'
     )
 
 
@@ -403,7 +414,7 @@ def dns_page(t: str) -> tuple[int, bytes]:
         hidden = "" if index == 0 else " hidden"
         domain_panels.append(
             f"""<div class="domain-panel" id="domain-panel-{index}"{hidden}>
-          <table>
+          <table class="dns-table">
             <thead><tr><th>Type</th><th>Name</th><th>Value</th></tr></thead>
             <tbody>{rows}</tbody>
           </table>
@@ -423,7 +434,7 @@ def dns_page(t: str) -> tuple[int, bytes]:
       {nav(t)}
       <section>
         <h2>Service hostnames</h2>
-        <table>
+        <table class="dns-table">
           <thead><tr><th>Type</th><th>Name</th><th>Value</th></tr></thead>
           <tbody>{''.join(service_rows)}</tbody>
         </table>

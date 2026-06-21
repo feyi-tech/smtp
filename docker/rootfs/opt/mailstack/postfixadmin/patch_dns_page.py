@@ -15,6 +15,14 @@ function mailstack_h($value) {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
 
+function mailstack_preview($value, $limit = 96) {
+    $text = (string)$value;
+    if (strlen($text) <= $limit) {
+        return $text;
+    }
+    return substr($text, 0, max(0, $limit - 3)) . '...';
+}
+
 function mailstack_dkim_value($domain) {
     $safe = basename($domain);
     $paths = array(
@@ -44,9 +52,10 @@ function mailstack_dkim_value($domain) {
 
 function mailstack_copy_field($value, $label = '') {
     $safe = mailstack_h($value);
+    $preview = mailstack_h(mailstack_preview($value));
     $copy = mailstack_h($label !== '' ? $label : $value);
     $icon = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="10" height="10" rx="2"></rect><path d="M5 15V7a2 2 0 0 1 2-2h8"></path></svg>';
-    return '<button class="copy-field" type="button" data-copy="' . $safe . '" aria-label="Copy ' . $copy . '"><code>' . $safe . '</code><span class="copy-icon">' . $icon . '</span><span class="copy-status">Copied</span></button>';
+    return '<button class="copy-field" type="button" data-copy="' . $safe . '" title="' . $safe . '" aria-label="Copy ' . $copy . '"><code class="copy-preview">' . $preview . '</code><span class="copy-icon">' . $icon . '</span><span class="copy-status">Copied</span></button>';
 }
 
 function mailstack_missing_field($value) {
@@ -107,18 +116,22 @@ $serviceHosts = array_values(array_unique(array_filter(array($mailHost, $roundcu
     label { display: block; font-weight: 700; margin-bottom: 6px; }
     select { min-width: min(100%, 360px); padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; font: inherit; background: #fff; }
     table { width: 100%; border-collapse: collapse; }
+    .dns-table { table-layout: fixed; }
+    .dns-table th:first-child, .dns-table td:first-child { width: 74px; }
+    .dns-table th:nth-child(2), .dns-table td:nth-child(2) { width: 34%; }
     th, td { text-align: left; border-bottom: 1px solid var(--line); padding: 12px 10px; vertical-align: top; }
     th { color: #1f2937; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
     .type-pill { display: inline-flex; min-width: 42px; justify-content: center; border: 1px solid var(--line); border-radius: 999px; padding: 3px 8px; font-weight: 800; font-size: 12px; background: var(--soft); }
     code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; white-space: normal; overflow-wrap: anywhere; }
-    .copy-field { width: 100%; display: inline-flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--ink); padding: 8px; text-align: left; cursor: pointer; }
+    .copy-field { width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--ink); padding: 8px; text-align: left; cursor: pointer; }
     .copy-field:hover, .copy-field:focus { border-color: var(--accent); background: #eef7fa; outline: none; }
+    .copy-field code { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .copy-icon { width: 18px; height: 18px; flex: 0 0 auto; color: var(--accent); }
     .copy-icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-    .copy-status { display: none; color: var(--good); font-weight: 800; font-size: 12px; }
+    .copy-status { display: none; flex: 0 0 auto; color: var(--good); font-weight: 800; font-size: 12px; }
     .copy-field.is-copied .copy-status { display: inline; }
     .copy-field.is-copied .copy-icon { display: none; }
-    .missing-field { display: block; color: var(--warn); background: #fff8e6; border: 1px solid #f3d08a; border-radius: 6px; padding: 10px; }
+    .missing-field { display: block; color: var(--warn); background: #fff8e6; border: 1px solid #f3d08a; border-radius: 6px; padding: 10px; overflow-wrap: anywhere; }
     .empty { padding: 14px; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 6px; }
   </style>
 </head>
@@ -128,7 +141,7 @@ $serviceHosts = array_values(array_unique(array_filter(array($mailHost, $roundcu
 
   <section class="panel">
     <h2>Service hostnames</h2>
-    <table>
+    <table class="dns-table">
       <thead><tr><th>Type</th><th>Name</th><th>Value</th></tr></thead>
       <tbody>
         <?php foreach ($serviceHosts as $host): ?>
@@ -173,7 +186,7 @@ $serviceHosts = array_values(array_unique(array_filter(array($mailHost, $roundcu
         }
       ?>
       <div class="domain-panel" id="domain-panel-<?php echo (int)$index; ?>" <?php echo $index === 0 ? '' : 'hidden'; ?>>
-        <table>
+        <table class="dns-table">
           <thead><tr><th>Type</th><th>Name</th><th>Value</th></tr></thead>
           <tbody>
             <tr>
