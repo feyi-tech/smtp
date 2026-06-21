@@ -9,6 +9,7 @@ MAILSTACK_STATE_DIR=${MAILSTACK_STATE_DIR:-.mailstack}
 MAILSTACK_ENV_FILE=${MAILSTACK_ENV_FILE:-$MAILSTACK_STATE_DIR/setup.env}
 MAILSTACK_SETUP_PORT_START=${MAILSTACK_SETUP_PORT_START:-8080}
 MAILSTACK_SETUP_PORT_END=${MAILSTACK_SETUP_PORT_END:-8099}
+SCRIPT_ARGS=("$@")
 
 log() {
   printf '\n========== %s ==========\n' "$1"
@@ -141,13 +142,29 @@ update_project_files() {
     fi
 
     log "Pulling latest MailStack from Git"
+    BEFORE_PULL=$(git rev-parse HEAD 2>/dev/null || true)
     git pull --ff-only
+    AFTER_PULL=$(git rev-parse HEAD 2>/dev/null || true)
     chmod +x mailstack.sh
+    if [ "$BEFORE_PULL" != "$AFTER_PULL" ]; then
+      restart_updated_script
+    fi
     return 0
   fi
 
   echo "This MailStack directory is not a Git checkout."
   refresh_project_archive
+  restart_updated_script
+}
+
+restart_updated_script() {
+  if [ "${MAILSTACK_REEXECED:-0}" = "1" ]; then
+    return 0
+  fi
+
+  echo "Restarting with the updated MailStack script..."
+  export MAILSTACK_REEXECED=1
+  exec "$0" "${SCRIPT_ARGS[@]}"
 }
 
 port_is_available() {
