@@ -43,7 +43,7 @@ Open these host ports:
 - `143` IMAP
 - `993` IMAPS
 - `80` Webmail/PostfixAdmin
-- `443` Reserved for HTTPS
+- `443` HTTPS for Roundcube and PostfixAdmin
 - `8080-8099` Tokenized setup UI, using the first available port
 
 ## Setup Page
@@ -62,12 +62,12 @@ Database passwords are generated automatically and stored inside the container s
 
 After setup:
 
-- Roundcube: `http://mail.example.com/`
-- PostfixAdmin: `http://postfix.example.com/`
+- Roundcube: `https://mail.example.com/`
+- PostfixAdmin: `https://postfix.example.com/`
 - Setup UI DNS records: `http://SERVER_IP:SETUP_PORT/setup/TOKEN/dns`
 - Setup UI connection details: `http://SERVER_IP:SETUP_PORT/setup/TOKEN/connection`
-- PostfixAdmin DNS page: `http://postfix.example.com/mailstack_dns.php`
-- PostfixAdmin connection page: `http://postfix.example.com/mailstack_connection.php`
+- PostfixAdmin DNS page: `https://postfix.example.com/mailstack_dns.php`
+- PostfixAdmin connection page: `https://postfix.example.com/mailstack_connection.php`
 
 ## Email Client Settings
 
@@ -79,6 +79,10 @@ MailStack shows copyable connection details in both the setup UI and PostfixAdmi
 - IMAPS: `mail.example.com`, port `993`, implicit TLS
 - Username format: full mailbox address, such as `user@example.com`
 - Password: the mailbox password created in PostfixAdmin
+
+## HTTPS
+
+MailStack enables HTTPS for both Roundcube and PostfixAdmin. During setup it first creates a self-signed fallback certificate so port `443` works immediately, then it tries to issue a Let's Encrypt certificate for the mail, Roundcube, and PostfixAdmin hostnames. Let's Encrypt issuance requires the hostnames to point to the server and inbound port `80` to be reachable. If issuance fails, the sites remain available over HTTPS with the self-signed fallback certificate.
 
 ## DNS
 

@@ -15,6 +15,10 @@ SECRETS_PATH = STATE_DIR / "secrets.json"
 ADMIN_PASSWORD_PATH = STATE_DIR / "admin-password.json"
 ROUNDCUBE_VERSION = os.environ.get("ROUNDCUBE_VERSION", "1.6.6")
 POSTFIXADMIN_VERSION = os.environ.get("POSTFIXADMIN_VERSION", "3.3.13")
+SELF_SIGNED_CERT = Path("/etc/ssl/mailstack/mailstack-selfsigned.crt")
+SELF_SIGNED_KEY = Path("/etc/ssl/mailstack/mailstack-selfsigned.key")
+LE_CERT = Path("/etc/letsencrypt/live/mailstack-web/fullchain.pem")
+LE_KEY = Path("/etc/letsencrypt/live/mailstack-web/privkey.pem")
 
 
 def run(args, check=True, input_text=None, env=None, display: str | None = None):
@@ -87,8 +91,8 @@ def admin_host(settings: dict[str, str]) -> str:
 def postfixadmin_url(settings: dict[str, str]) -> str:
     host = admin_host(settings)
     if host in {webmail_host(settings), settings.get("mail_hostname", "")}:
-        return f"http://{host}/postfixadmin/"
-    return f"http://{host}/"
+        return f"https://{host}/postfixadmin/"
+    return f"https://{host}/"
 
 
 def server_names(*hosts: str) -> str:
@@ -100,6 +104,88 @@ def server_names(*hosts: str) -> str:
             names.append(clean)
             seen.add(clean)
     return " ".join(names) or "_"
+
+
+def web_certificate_hosts(settings: dict[str, str]) -> list[str]:
+    return [host for host in server_names(settings["mail_hostname"], webmail_host(settings), admin_host(settings)).split() if host != "_"]
+
+
+def ensure_self_signed_cert(settings: dict[str, str]) -> tuple[Path, Path]:
+    if SELF_SIGNED_CERT.exists() and SELF_SIGNED_KEY.exists():
+        return SELF_SIGNED_CERT, SELF_SIGNED_KEY
+
+    SELF_SIGNED_CERT.parent.mkdir(parents=True, exist_ok=True)
+    hosts = web_certificate_hosts(settings)
+    primary = hosts[0]
+    san = ",".join(f"DNS:{host}" for host in hosts)
+    run(
+        [
+            "openssl",
+            "req",
+            "-x509",
+            "-nodes",
+            "-newkey",
+            "rsa:2048",
+            "-days",
+            "3650",
+            "-keyout",
+            str(SELF_SIGNED_KEY),
+            "-out",
+            str(SELF_SIGNED_CERT),
+            "-subj",
+            f"/CN={primary}",
+            "-addext",
+            f"subjectAltName={san}",
+        ]
+    )
+    SELF_SIGNED_KEY.chmod(0o600)
+    return SELF_SIGNED_CERT, SELF_SIGNED_KEY
+
+
+def active_cert_paths() -> tuple[Path, Path]:
+    if LE_CERT.exists() and LE_KEY.exists():
+        return LE_CERT, LE_KEY
+    return SELF_SIGNED_CERT, SELF_SIGNED_KEY
+
+
+def reload_nginx() -> None:
+    run(["nginx", "-t"])
+    proc = run(["supervisorctl", "restart", "nginx"], check=False)
+    if proc.returncode != 0:
+        run(["nginx", "-s", "reload"], check=False)
+
+
+def try_letsencrypt(settings: dict[str, str]) -> bool:
+    if not shutil.which("certbot"):
+        print("certbot is not installed; HTTPS will use the self-signed fallback certificate.")
+        return False
+
+    hosts = web_certificate_hosts(settings)
+    args = [
+        "certbot",
+        "certonly",
+        "--webroot",
+        "-w",
+        "/var/www/certbot",
+        "--non-interactive",
+        "--agree-tos",
+        "--email",
+        settings["admin_email"],
+        "--cert-name",
+        "mailstack-web",
+        "--expand",
+        "--keep-until-expiring",
+    ]
+    for host in hosts:
+        args.extend(["-d", host])
+
+    proc = run(args, check=False)
+    if proc.returncode == 0 and LE_CERT.exists() and LE_KEY.exists():
+        print("Let's Encrypt certificate is installed for the web apps.")
+        return True
+
+    print("Let's Encrypt certificate was not issued; HTTPS will use the self-signed fallback certificate.")
+    return False
 
 
 def wait_mysql() -> None:
@@ -382,42 +468,28 @@ def reset_postfixadmin_password(email: str, password: str | None) -> None:
         )
 
 
-def configure_nginx(settings: dict[str, str]) -> None:
+def configure_nginx(settings: dict[str, str], cert_file: Path, key_file: Path) -> None:
     mail_host = settings["mail_hostname"]
     roundcube_host = webmail_host(settings)
     pfa_host = admin_host(settings)
     roundcube_names = server_names(roundcube_host, mail_host, "_")
     pfa_url_at_root = pfa_host not in {roundcube_host, mail_host}
-    pfa_block = ""
-    if pfa_url_at_root:
-        pfa_block = f"""
-server {{
-    listen 80;
-    server_name {server_names(pfa_host)};
-
-    root /var/www/postfixadmin/public;
-    index index.php index.html;
-
-    location / {{
-        try_files $uri $uri/ /index.php;
-    }}
-
-    location ~ \\.php$ {{
-        include snippets/fastcgi-php.conf;
-        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-        fastcgi_pass unix:/run/php/php-fpm.sock;
-    }}
-}}
+    acme_location = """
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+        default_type text/plain;
+    }
 """
-    write_file(
-        "/etc/nginx/sites-available/default",
-        f"""server {{
-    listen 80 default_server;
-    server_name {roundcube_names};
-
+    ssl_settings = f"""
+    ssl_certificate {cert_file};
+    ssl_certificate_key {key_file};
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+"""
+    roundcube_locations = f"""
     root /var/www/roundcube;
     index index.php index.html;
-
+{acme_location}
     location / {{
         try_files $uri $uri/ /index.php;
     }}
@@ -439,10 +511,62 @@ server {{
         include snippets/fastcgi-php.conf;
         fastcgi_pass unix:/run/php/php-fpm.sock;
     }}
+"""
+    postfixadmin_locations = f"""
+    root /var/www/postfixadmin/public;
+    index index.php index.html;
+{acme_location}
+    location / {{
+        try_files $uri $uri/ /index.php;
+    }}
+
+    location ~ \\.php$ {{
+        include snippets/fastcgi-php.conf;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_pass unix:/run/php/php-fpm.sock;
+    }}
+"""
+    pfa_block = ""
+    if pfa_url_at_root:
+        pfa_block = f"""
+server {{
+    listen 80;
+    server_name {server_names(pfa_host)};
+{postfixadmin_locations}
+}}
+
+server {{
+    listen 443 ssl;
+    server_name {server_names(pfa_host)};
+{ssl_settings}
+{postfixadmin_locations}
+}}
+"""
+    write_file(
+        "/etc/nginx/sites-available/default",
+        f"""server {{
+    listen 80 default_server;
+    server_name {roundcube_names};
+{roundcube_locations}
+}}
+
+server {{
+    listen 443 ssl default_server;
+    server_name {roundcube_names};
+{ssl_settings}
+{roundcube_locations}
 }}
 {pfa_block}
 """,
     )
+
+
+def configure_web_tls(settings: dict[str, str]) -> None:
+    ensure_self_signed_cert(settings)
+    configure_nginx(settings, *active_cert_paths())
+    reload_nginx()
+    if try_letsencrypt(settings):
+        configure_nginx(settings, *active_cert_paths())
 
 
 def apply(settings: dict[str, str], password_only: bool) -> None:
@@ -468,7 +592,7 @@ def apply(settings: dict[str, str], password_only: bool) -> None:
     configure_postfix(settings, sec)
     configure_dovecot(sec)
     install_roundcube(sec)
-    configure_nginx(settings)
+    configure_web_tls(settings)
     run(["postfix", "reload"], check=False)
     run(["supervisorctl", "restart", "dovecot"], check=False)
     run(["supervisorctl", "restart", "nginx"], check=False)

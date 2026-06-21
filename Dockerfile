@@ -7,6 +7,7 @@ RUN apt-get update \
   && echo "postfix postfix/main_mailer_type string Internet Site" | debconf-set-selections \
   && apt-get install -y --no-install-recommends \
     ca-certificates \
+    certbot \
     curl \
     dovecot-core \
     dovecot-imapd \

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 install -d -m 700 /data/state
-install -d -m 755 /run/mysqld /run/php /var/vmail /etc/opendkim/keys
+install -d -m 755 /run/mysqld /run/php /var/vmail /etc/opendkim/keys /var/www/certbot
 chown -R mysql:mysql /run/mysqld /var/lib/mysql
 
 if ! getent group vmail >/dev/null; then
@@ -55,6 +55,11 @@ server {
 
     root /var/www/roundcube/public_html;
     index index.php index.html;
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+        default_type text/plain;
+    }
 
     location / {
         try_files $uri $uri/ /index.php;

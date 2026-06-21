@@ -148,15 +148,15 @@ $mailHost = mailstack_setting('mail_hostname', 'mail.example.com');
 $roundcubeHost = mailstack_setting('roundcube_domain', $mailHost);
 $postfixAdminHost = mailstack_setting('postfixadmin_domain', 'postfix.example.com');
 $postfixAdminUrl = $postfixAdminHost === $roundcubeHost || $postfixAdminHost === $mailHost
-    ? 'http://' . $postfixAdminHost . '/postfixadmin/'
-    : 'http://' . $postfixAdminHost . '/';
+    ? 'https://' . $postfixAdminHost . '/postfixadmin/'
+    : 'https://' . $postfixAdminHost . '/';
 $rows = array(
     array('SMTP submission', $mailHost, '587', 'STARTTLS. Use the full mailbox address as the username.'),
     array('SMTP over TLS', $mailHost, '465', 'Implicit TLS. Use the full mailbox address as the username.'),
     array('IMAP', $mailHost, '143', 'STARTTLS. Use the full mailbox address as the username.'),
     array('IMAPS', $mailHost, '993', 'Implicit TLS. Use the full mailbox address as the username.'),
-    array('Webmail', 'http://' . $roundcubeHost . '/', '80', 'Roundcube mailbox login.'),
-    array('PostfixAdmin', $postfixAdminUrl, '80', 'Domain and mailbox administration.')
+    array('Webmail', 'https://' . $roundcubeHost . '/', '443', 'Roundcube mailbox login.'),
+    array('PostfixAdmin', $postfixAdminUrl, '443', 'Domain and mailbox administration.')
 );
 
 ?><!doctype html>

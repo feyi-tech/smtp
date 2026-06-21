@@ -21,6 +21,23 @@ class StaticProjectTests(unittest.TestCase):
             self.assertIn(port, compose)
         self.assertIn("${MAILSTACK_SETUP_PORT:-8080}:8080", compose)
 
+    def test_web_apps_support_https(self):
+        dockerfile = (ROOT / "Dockerfile").read_text()
+        apply_config = (ROOT / "docker/rootfs/opt/mailstack/setup/apply_config.py").read_text()
+        server = (ROOT / "docker/rootfs/opt/mailstack/setup/server.py").read_text()
+        patch = (ROOT / "docker/rootfs/opt/mailstack/postfixadmin/patch_dns_page.py").read_text()
+        supervisor = (ROOT / "docker/rootfs/etc/supervisor/conf.d/mailstack.conf").read_text()
+
+        self.assertIn("certbot", dockerfile)
+        self.assertIn("mailstack-cert-renew", supervisor)
+        self.assertIn("listen 443 ssl", apply_config)
+        self.assertIn("ssl_certificate", apply_config)
+        self.assertIn("try_letsencrypt", apply_config)
+        self.assertIn("mailstack-selfsigned", apply_config)
+        self.assertIn("https://{host}", apply_config)
+        self.assertIn("https://{html.escape(webmail)}/", server)
+        self.assertIn("'https://' . $roundcubeHost", patch)
+
     def test_setup_ui_uses_tokenized_routes(self):
         server = (ROOT / "docker/rootfs/opt/mailstack/setup/server.py").read_text()
         self.assertIn("/setup/{token()}", server)

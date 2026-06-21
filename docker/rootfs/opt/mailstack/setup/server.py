@@ -131,8 +131,8 @@ def admin_host(settings: dict[str, str]) -> str:
 def postfixadmin_url(settings: dict[str, str]) -> str:
     host = admin_host(settings)
     if host in {webmail_host(settings), settings.get("mail_hostname", "")}:
-        return f"http://{host}/postfixadmin/"
-    return f"http://{host}/"
+        return f"https://{host}/postfixadmin/"
+    return f"https://{host}/"
 
 
 def run_apply(extra_args: list[str] | None = None) -> tuple[int, str]:
@@ -270,7 +270,7 @@ def setup_form(t: str, message: str = "") -> tuple[int, bytes]:
       <section>
         <h2>Access after setup</h2>
         <p>SMTP/IMAP server: <code>{form_value(settings, 'mail_hostname') or 'mail.example.com'}</code></p>
-        <p>Roundcube: <code>http://{html.escape(webmail)}/</code></p>
+        <p>Roundcube: <code>https://{html.escape(webmail)}/</code></p>
         <p>PostfixAdmin: <code>{html.escape(postfixadmin_url(settings))}</code></p>
       </section>
     """
@@ -377,8 +377,8 @@ def connection_rows(settings: dict[str, str]) -> list[tuple[str, str, str, str]]
         ("SMTP over TLS", mail_hostname, "465", "Implicit TLS, username is full mailbox address"),
         ("IMAP", mail_hostname, "143", "STARTTLS, username is full mailbox address"),
         ("IMAPS", mail_hostname, "993", "Implicit TLS, username is full mailbox address"),
-        ("Webmail", f"http://{webmail_host(settings)}/", "80", "Roundcube mailbox login"),
-        ("PostfixAdmin", postfixadmin_url(settings), "80", "Domain and mailbox administration"),
+        ("Webmail", f"https://{webmail_host(settings)}/", "443", "Roundcube mailbox login"),
+        ("PostfixAdmin", postfixadmin_url(settings), "443", "Domain and mailbox administration"),
     ]
 
 

@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+while true; do
+  if command -v certbot >/dev/null 2>&1; then
+    certbot renew --webroot -w /var/www/certbot --quiet --deploy-hook "nginx -s reload" || true
+  fi
+  sleep 12h
+done
