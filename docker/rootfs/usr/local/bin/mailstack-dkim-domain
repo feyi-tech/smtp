@@ -17,7 +17,10 @@ case "$DOMAIN" in
 esac
 
 KEY_DIR="/etc/opendkim/keys/$DOMAIN"
-install -d -m 750 -o opendkim -g opendkim "$KEY_DIR"
+PUBLIC_DIR="/data/state/dkim"
+install -d -m 755 -o opendkim -g opendkim "$KEY_DIR"
+install -d -m 755 "$PUBLIC_DIR"
+chmod 711 /data/state 2>/dev/null || true
 CHANGED=0
 
 ensure_trusted_host() {
@@ -31,10 +34,14 @@ ensure_trusted_host() {
 if [ ! -f "$KEY_DIR/$SELECTOR.private" ]; then
   opendkim-genkey -D "$KEY_DIR" -d "$DOMAIN" -s "$SELECTOR" -b 2048
   chown -R opendkim:opendkim "$KEY_DIR"
-  chmod 600 "$KEY_DIR/$SELECTOR.private"
-  chmod 644 "$KEY_DIR/$SELECTOR.txt"
   CHANGED=1
 fi
+
+chmod 755 "$KEY_DIR"
+chmod 600 "$KEY_DIR/$SELECTOR.private"
+chmod 644 "$KEY_DIR/$SELECTOR.txt"
+cp "$KEY_DIR/$SELECTOR.txt" "$PUBLIC_DIR/$DOMAIN.$SELECTOR.txt"
+chmod 644 "$PUBLIC_DIR/$DOMAIN.$SELECTOR.txt"
 
 KEY_LINE="$SELECTOR._domainkey.$DOMAIN $DOMAIN:$SELECTOR:$KEY_DIR/$SELECTOR.private"
 if ! grep -Fqx "$KEY_LINE" /etc/opendkim/key.table 2>/dev/null; then

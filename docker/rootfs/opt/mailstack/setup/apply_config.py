@@ -468,6 +468,26 @@ def reset_postfixadmin_password(email: str, password: str | None) -> None:
         )
 
 
+def active_mail_domains() -> list[str]:
+    proc = run(
+        ["mysql", "-uroot", "postfixadmin", "-N", "-e", "SELECT domain FROM domain WHERE active = 1 ORDER BY domain"],
+        check=False,
+    )
+    if proc.returncode != 0:
+        return []
+    domains = []
+    for line in proc.stdout.splitlines():
+        domain = line.strip()
+        if domain and domain != "ALL":
+            domains.append(domain)
+    return domains
+
+
+def sync_dkim_domains() -> None:
+    for domain in active_mail_domains():
+        run(["mailstack-dkim-domain", domain], check=False)
+
+
 def configure_nginx(settings: dict[str, str], cert_file: Path, key_file: Path) -> None:
     mail_host = settings["mail_hostname"]
     roundcube_host = webmail_host(settings)
@@ -589,6 +609,7 @@ def apply(settings: dict[str, str], password_only: bool) -> None:
     wait_mysql()
     ensure_database(settings, sec)
     install_postfixadmin(settings, sec, admin_password)
+    sync_dkim_domains()
     configure_postfix(settings, sec)
     configure_dovecot(sec)
     install_roundcube(sec)

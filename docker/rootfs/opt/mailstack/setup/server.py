@@ -186,7 +186,7 @@ def page(title: str, body: str, status: HTTPStatus = HTTPStatus.OK) -> tuple[int
       margin-top: 16px;
     }}
     label {{ display: block; font-weight: 650; margin: 14px 0 6px; }}
-    input {{
+    input, select {{
       width: min(100%, 520px);
       box-sizing: border-box;
       padding: 10px 12px;
@@ -219,6 +219,17 @@ def page(title: str, body: str, status: HTTPStatus = HTTPStatus.OK) -> tuple[int
     }}
     table {{ width: 100%; border-collapse: collapse; background: var(--panel); }}
     th, td {{ text-align: left; border-bottom: 1px solid var(--line); padding: 10px; vertical-align: top; }}
+    th {{ color: #1f2937; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }}
+    .panel-head {{ display: flex; align-items: end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }}
+    .type-pill {{ display: inline-flex; min-width: 42px; justify-content: center; border: 1px solid var(--line); border-radius: 999px; padding: 3px 8px; font-weight: 800; font-size: 12px; background: #f8fafc; }}
+    .copy-field {{ width: 100%; display: inline-flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--ink); padding: 8px; text-align: left; cursor: pointer; }}
+    .copy-field:hover, .copy-field:focus {{ border-color: var(--accent); background: #eef7fa; outline: none; }}
+    .copy-icon {{ width: 18px; height: 18px; flex: 0 0 auto; color: var(--accent); }}
+    .copy-icon svg {{ width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }}
+    .copy-status {{ display: none; color: var(--good); font-weight: 800; font-size: 12px; }}
+    .copy-field.is-copied .copy-status {{ display: inline; }}
+    .copy-field.is-copied .copy-icon {{ display: none; }}
+    .missing-field {{ display: block; color: #9a5b00; background: #fff8e6; border: 1px solid #f3d08a; border-radius: 6px; padding: 10px; }}
     .ok {{ color: var(--good); font-weight: 700; }}
     .bad {{ color: var(--bad); font-weight: 700; }}
     .nav {{ display: flex; gap: 10px; flex-wrap: wrap; margin: 18px 0; }}
@@ -277,24 +288,65 @@ def setup_form(t: str, message: str = "") -> tuple[int, bytes]:
     return page("MailStack Setup", body)
 
 
-def dns_records_for(domain: str, mail_hostname: str, public_ip: str) -> list[tuple[str, str, str]]:
-    records = [
-        ("A", mail_hostname, public_ip or "YOUR_SERVER_IP"),
-        ("MX", domain, f"10 {mail_hostname}"),
-        ("TXT", domain, "v=spf1 mx a ~all"),
-        ("TXT", f"_dmarc.{domain}", f"v=DMARC1; p=quarantine; rua=mailto:postmaster@{domain}"),
+def parse_dkim_txt(raw: str) -> str:
+    compact = " ".join(line.strip() for line in raw.splitlines() if "DKIM1" in line or "p=" in line)
+    compact = compact.replace('"', "").replace("(", "").replace(")", "").replace("\t", " ")
+    compact = " ".join(compact.split())
+    if "p=" not in compact:
+        return ""
+    return compact.split("TXT", 1)[-1].strip() if "TXT" in compact else compact
+
+
+def dkim_value_for(domain: str) -> str:
+    paths = [
+        Path("/data/state/dkim") / f"{domain}.default.txt",
+        Path("/etc/opendkim/keys") / domain / "default.txt",
     ]
-    txt_path = Path("/etc/opendkim/keys") / domain / "default.txt"
-    if txt_path.exists():
-        raw = txt_path.read_text(encoding="utf-8", errors="ignore")
-        compact = " ".join(line.strip() for line in raw.splitlines() if "DKIM1" in line or "p=" in line)
-        compact = compact.replace('"', "").replace("(", "").replace(")", "").replace("\t", " ")
-        if "p=" in compact:
-            value = compact.split("TXT", 1)[-1].strip() if "TXT" in compact else compact
-            records.append(("TXT", f"default._domainkey.{domain}", value))
-    else:
-        records.append(("TXT", f"default._domainkey.{domain}", "DKIM key is generated after the domain exists in PostfixAdmin. Refresh this page after adding it."))
+    for path in paths:
+        if path.exists():
+            value = parse_dkim_txt(path.read_text(encoding="utf-8", errors="ignore"))
+            if value:
+                return value
+    return ""
+
+
+def dns_records_for(domain: str, mail_hostname: str, public_ip: str) -> list[tuple[str, str, str, bool]]:
+    dkim_value = dkim_value_for(domain)
+    records = [
+        ("A", mail_hostname, public_ip or "YOUR_SERVER_IP", False),
+        ("MX", domain, f"10 {mail_hostname}", False),
+        ("TXT", domain, "v=spf1 mx a ~all", False),
+        (
+            "TXT",
+            f"default._domainkey.{domain}",
+            dkim_value or "DKIM key is being generated automatically. Wait up to 60 seconds, then refresh this page.",
+            not bool(dkim_value),
+        ),
+        ("TXT", f"_dmarc.{domain}", f"v=DMARC1; p=quarantine; rua=mailto:postmaster@{domain}", False),
+    ]
     return records
+
+
+def copy_field(value: str, label: str = "") -> str:
+    safe_value = html.escape(value)
+    safe_label = html.escape(label or value)
+    icon = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="10" height="10" rx="2"></rect><path d="M5 15V7a2 2 0 0 1 2-2h8"></path></svg>'
+    return (
+        f'<button class="copy-field" type="button" data-copy="{safe_value}" aria-label="Copy {safe_label}">'
+        f"<code>{safe_value}</code><span class=\"copy-icon\">{icon}</span><span class=\"copy-status\">Copied</span></button>"
+    )
+
+
+def missing_field(value: str) -> str:
+    return f'<span class="missing-field">{html.escape(value)}</span>'
+
+
+def record_row(rtype: str, name: str, value: str, missing: bool = False) -> str:
+    rendered_value = missing_field(value) if missing else copy_field(value, "record value")
+    return (
+        f'<tr><td><span class="type-pill">{html.escape(rtype)}</span></td>'
+        f'<td>{copy_field(name, "record name")}</td><td>{rendered_value}</td></tr>'
+    )
 
 
 def read_domains() -> list[str]:
@@ -337,17 +389,34 @@ def dns_page(t: str) -> tuple[int, bytes]:
     mail_hostname = settings.get("mail_hostname", "mail.example.com")
     public_ip = settings.get("public_ip", "YOUR_SERVER_IP")
     service_rows = [
-        f"<tr><td><code>{html.escape(rtype)}</code></td><td><code>{html.escape(name)}</code></td>"
-        f"<td><code>{html.escape(value)}</code></td></tr>"
+        record_row(rtype, name, value)
         for rtype, name, value in service_dns_records(settings, public_ip)
     ]
-    domain_rows = []
-    for domain in read_domains():
-        for rtype, name, value in dns_records_for(domain, mail_hostname, public_ip):
-            domain_rows.append(
-                f"<tr><td><code>{html.escape(rtype)}</code></td><td><code>{html.escape(name)}</code></td>"
-                f"<td><code>{html.escape(value)}</code></td></tr>"
-            )
+    domains = read_domains()
+    options = "".join(
+        f'<option value="domain-panel-{index}">{html.escape(domain)}</option>'
+        for index, domain in enumerate(domains)
+    )
+    domain_panels = []
+    for index, domain in enumerate(domains):
+        rows = "".join(record_row(rtype, name, value, missing) for rtype, name, value, missing in dns_records_for(domain, mail_hostname, public_ip))
+        hidden = "" if index == 0 else " hidden"
+        domain_panels.append(
+            f"""<div class="domain-panel" id="domain-panel-{index}"{hidden}>
+          <table>
+            <thead><tr><th>Type</th><th>Name</th><th>Value</th></tr></thead>
+            <tbody>{rows}</tbody>
+          </table>
+        </div>"""
+        )
+    domain_selector = ""
+    if domains:
+        domain_selector = f"""
+          <div>
+            <label for="domain-select">Domain</label>
+            <select id="domain-select">{options}</select>
+          </div>
+        """
     body = f"""
       <h1>DNS Records</h1>
       <p>Copy these records to the DNS provider for each domain you add in PostfixAdmin.</p>
@@ -360,12 +429,55 @@ def dns_page(t: str) -> tuple[int, bytes]:
         </table>
       </section>
       <section>
-        <h2>Email domains</h2>
-        <table>
-          <thead><tr><th>Type</th><th>Name</th><th>Value</th></tr></thead>
-          <tbody>{''.join(domain_rows) or '<tr><td colspan="3">No PostfixAdmin domains found yet.</td></tr>'}</tbody>
-        </table>
+        <div class="panel-head">
+          <div>
+            <h2>Email domains</h2>
+            <p>Choose a domain to view only the DNS records for that domain.</p>
+          </div>
+          {domain_selector}
+        </div>
+        {''.join(domain_panels) or '<p>No PostfixAdmin domains found yet.</p>'}
       </section>
+      <script>
+        (function () {{
+          var select = document.getElementById('domain-select');
+          if (select) {{
+            select.addEventListener('change', function () {{
+              document.querySelectorAll('.domain-panel').forEach(function (panel) {{
+                panel.hidden = panel.id !== select.value;
+              }});
+            }});
+          }}
+          function fallbackCopy(text) {{
+            var area = document.createElement('textarea');
+            area.value = text;
+            area.setAttribute('readonly', 'readonly');
+            area.style.position = 'fixed';
+            area.style.left = '-9999px';
+            document.body.appendChild(area);
+            area.select();
+            try {{ document.execCommand('copy'); }} finally {{ document.body.removeChild(area); }}
+          }}
+          document.addEventListener('click', function (event) {{
+            var field = event.target.closest('[data-copy]');
+            if (!field) return;
+            var text = field.getAttribute('data-copy');
+            var done = function () {{
+              document.querySelectorAll('.copy-field.is-copied').forEach(function (item) {{
+                item.classList.remove('is-copied');
+              }});
+              field.classList.add('is-copied');
+              window.setTimeout(function () {{ field.classList.remove('is-copied'); }}, 1400);
+            }};
+            if (navigator.clipboard && navigator.clipboard.writeText) {{
+              navigator.clipboard.writeText(text).then(done).catch(function () {{ fallbackCopy(text); done(); }});
+            }} else {{
+              fallbackCopy(text);
+              done();
+            }}
+          }});
+        }})();
+      </script>
     """
     return page("MailStack DNS Records", body)
 

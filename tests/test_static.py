@@ -69,6 +69,10 @@ class StaticProjectTests(unittest.TestCase):
         self.assertIn("postfixadmin_domain", patch)
         self.assertIn("default._domainkey", patch)
         self.assertIn("v=DMARC1", patch)
+        self.assertIn("domain-select", patch)
+        self.assertIn("data-copy", patch)
+        self.assertIn("copy-status", patch)
+        self.assertIn("/data/state/dkim/", patch)
 
     def test_database_passwords_are_generated_internally(self):
         apply_config = (ROOT / "docker/rootfs/opt/mailstack/setup/apply_config.py").read_text()
@@ -76,6 +80,27 @@ class StaticProjectTests(unittest.TestCase):
         self.assertIn("postfixadmin_db_password", apply_config)
         self.assertIn("roundcube_db_password", apply_config)
         self.assertIn("php_crypt:BLOWFISH:12:{{BLF-CRYPT}}", apply_config)
+
+    def test_dkim_public_txt_is_readable_by_web_ui(self):
+        dkim = (ROOT / "docker/rootfs/usr/local/bin/mailstack-dkim-domain").read_text()
+        setup = (ROOT / "docker/rootfs/opt/mailstack/setup/server.py").read_text()
+        apply_config = (ROOT / "docker/rootfs/opt/mailstack/setup/apply_config.py").read_text()
+        self.assertIn("/data/state/dkim", dkim)
+        self.assertIn("cp \"$KEY_DIR/$SELECTOR.txt\"", dkim)
+        self.assertIn("chmod 644 \"$PUBLIC_DIR/$DOMAIN.$SELECTOR.txt\"", dkim)
+        self.assertIn("chmod 711 /data/state", dkim)
+        self.assertIn("/data/state/dkim", setup)
+        self.assertIn("sync_dkim_domains", apply_config)
+
+    def test_dns_pages_have_domain_selector_and_copy_controls(self):
+        server = (ROOT / "docker/rootfs/opt/mailstack/setup/server.py").read_text()
+        patch = (ROOT / "docker/rootfs/opt/mailstack/postfixadmin/patch_dns_page.py").read_text()
+        for content in [server, patch]:
+            self.assertIn("domain-select", content)
+            self.assertIn("domain-panel", content)
+            self.assertIn("data-copy", content)
+            self.assertIn("copy-field", content)
+            self.assertIn("Copied", content)
 
     def test_host_script_does_not_generate_mail_conf(self):
         script = (ROOT / "mailstack.sh").read_text()
