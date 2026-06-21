@@ -102,6 +102,15 @@ class StaticProjectTests(unittest.TestCase):
         self.assertNotIn("[y/N]", script)
         self.assertNotIn("MAILSTACK_ASSUME_YES", script)
 
+    def test_host_script_can_update_and_recreate(self):
+        script = (ROOT / "mailstack.sh").read_text()
+        self.assertIn("update_project_files()", script)
+        self.assertIn("git pull --ff-only", script)
+        self.assertIn("refresh_project_archive()", script)
+        self.assertIn("update)", script)
+        self.assertIn("compose up -d --build --force-recreate", script)
+        self.assertIn("install|up|update|url|status|logs|down|destroy --yes", script)
+
 
 if __name__ == "__main__":
     unittest.main()

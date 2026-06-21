@@ -100,6 +100,7 @@ DKIM keys are generated automatically when domains are added in PostfixAdmin.
 
 ```bash
 ./mailstack.sh install       # install Docker if needed, build, and start
+./mailstack.sh update        # pull latest code, rebuild, and recreate containers
 ./mailstack.sh url           # print setup URL
 ./mailstack.sh status        # show containers
 ./mailstack.sh logs          # follow mail container logs

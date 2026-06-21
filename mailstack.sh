@@ -106,6 +106,50 @@ ensure_project_files() {
   echo "MailStack project files are ready."
 }
 
+refresh_project_archive() {
+  echo "Downloading the latest MailStack project files from GitHub..."
+
+  if ! command -v tar >/dev/null 2>&1; then
+    echo "tar is required to unpack the MailStack project archive."
+    exit 1
+  fi
+
+  TMP_DIR=$(mktemp -d /tmp/mailstack-project.XXXXXX)
+  ARCHIVE="$TMP_DIR/mailstack.tar.gz"
+  download_file "$MAILSTACK_REPO_URL" "$ARCHIVE"
+  tar -xzf "$ARCHIVE" -C "$TMP_DIR"
+
+  PROJECT_DIR=$(find "$TMP_DIR" -mindepth 1 -maxdepth 1 -type d | head -n 1)
+  if [ -z "$PROJECT_DIR" ] || [ ! -f "$PROJECT_DIR/mailstack.sh" ]; then
+    echo "Downloaded archive did not contain the MailStack project."
+    rm -rf "$TMP_DIR"
+    exit 1
+  fi
+
+  cp -R "$PROJECT_DIR"/. .
+  chmod +x mailstack.sh
+  rm -rf "$TMP_DIR"
+  echo "MailStack project files were updated from GitHub."
+}
+
+update_project_files() {
+  if [ -d ".git" ]; then
+    if ! command -v git >/dev/null 2>&1; then
+      echo "This MailStack directory is a Git checkout, but git is not installed."
+      echo "Install git, then rerun: ./mailstack.sh update"
+      exit 1
+    fi
+
+    log "Pulling latest MailStack from Git"
+    git pull --ff-only
+    chmod +x mailstack.sh
+    return 0
+  fi
+
+  echo "This MailStack directory is not a Git checkout."
+  refresh_project_archive
+}
+
 port_is_available() {
   PORT=$1
 
@@ -483,6 +527,18 @@ case "${1:-up}" in
     print_setup_url
     ;;
 
+  update)
+    update_project_files
+    ensure_project_files
+    sync_setup_port_from_running_container || choose_setup_port
+    save_public_host "$(detect_host)"
+    ensure_docker
+    log "Rebuilding and recreating MailStack"
+    compose up -d --build --force-recreate
+    log "Setup link"
+    print_setup_url
+    ;;
+
   url)
     ensure_docker
     print_setup_url
@@ -513,7 +569,7 @@ case "${1:-up}" in
     ;;
 
   *)
-    echo "Usage: ./mailstack.sh [install|up|url|status|logs|down|destroy --yes]"
+    echo "Usage: ./mailstack.sh [install|up|update|url|status|logs|down|destroy --yes]"
     exit 1
     ;;
 esac
