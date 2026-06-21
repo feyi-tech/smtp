@@ -79,6 +79,7 @@ class StaticProjectTests(unittest.TestCase):
         self.assertIn("secrets.token_urlsafe(32)", apply_config)
         self.assertIn("postfixadmin_db_password", apply_config)
         self.assertIn("roundcube_db_password", apply_config)
+        self.assertIn("roundcube_des_key", apply_config)
         self.assertIn("php_crypt:BLOWFISH:12:{{BLF-CRYPT}}", apply_config)
 
     def test_roundcube_uses_secure_local_mail_connections(self):
@@ -151,6 +152,7 @@ class StaticProjectTests(unittest.TestCase):
         self.assertIn("exec \"$0\" \"${SCRIPT_ARGS[@]}\"", script)
         self.assertIn("reapply_saved_setup()", script)
         self.assertIn("mailstack-apply-saved", script)
+        self.assertIn("compose up -d --build\n    reapply_saved_setup", script)
         self.assertIn("update)", script)
         self.assertIn("compose up -d --build --force-recreate", script)
         self.assertIn("subprocess.call", apply_saved)

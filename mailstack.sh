@@ -548,6 +548,7 @@ case "${1:-up}" in
     ensure_docker
     log "Building and starting MailStack"
     compose up -d --build
+    reapply_saved_setup
     log "Setup link"
     print_setup_url
     ;;

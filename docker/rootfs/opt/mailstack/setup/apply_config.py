@@ -52,10 +52,19 @@ def read_admin_password() -> str:
 
 def read_secrets() -> dict[str, str]:
     if SECRETS_PATH.exists():
-        return json.loads(SECRETS_PATH.read_text(encoding="utf-8"))
+        data = json.loads(SECRETS_PATH.read_text(encoding="utf-8"))
+        changed = False
+        if not data.get("roundcube_des_key"):
+            data["roundcube_des_key"] = secrets.token_urlsafe(24)[:24]
+            changed = True
+        if changed:
+            SECRETS_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            SECRETS_PATH.chmod(0o600)
+        return data
     data = {
         "postfixadmin_db_password": secrets.token_urlsafe(32),
         "roundcube_db_password": secrets.token_urlsafe(32),
+        "roundcube_des_key": secrets.token_urlsafe(24)[:24],
     }
     SECRETS_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
     SECRETS_PATH.chmod(0o600)
@@ -377,7 +386,6 @@ def install_roundcube(sec: dict[str, str]) -> None:
 
     config_dir = dest / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
-    des_key = secrets.token_urlsafe(24)[:24]
     write_file(
         config_dir / "config.inc.php",
         f"""<?php
@@ -400,7 +408,7 @@ $config['smtp_conn_options'] = array(
         'allow_self_signed' => true,
     ),
 );
-$config['des_key'] = {php_quote(des_key)};
+$config['des_key'] = {php_quote(sec['roundcube_des_key'])};
 ?>
 """,
     )
