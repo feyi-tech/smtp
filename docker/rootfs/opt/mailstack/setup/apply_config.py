@@ -342,7 +342,7 @@ $CONF['database_user'] = 'postfixadmin';
 $CONF['database_password'] = {php_quote(sec['postfixadmin_db_password'])};
 $CONF['database_name'] = 'postfixadmin';
 $CONF['setup_password'] = {php_quote(setup_hash)};
-$CONF['encrypt'] = 'php_crypt:BLOWFISH:12:{BLF-CRYPT}';
+$CONF['encrypt'] = 'php_crypt:BLOWFISH:12:{{BLF-CRYPT}}';
 $CONF['default_aliases'] = array();
 ?>
 """,

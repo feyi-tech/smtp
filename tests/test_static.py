@@ -58,7 +58,7 @@ class StaticProjectTests(unittest.TestCase):
         self.assertIn("secrets.token_urlsafe(32)", apply_config)
         self.assertIn("postfixadmin_db_password", apply_config)
         self.assertIn("roundcube_db_password", apply_config)
-        self.assertIn("php_crypt:BLOWFISH:12:{BLF-CRYPT}", apply_config)
+        self.assertIn("php_crypt:BLOWFISH:12:{{BLF-CRYPT}}", apply_config)
 
     def test_host_script_does_not_generate_mail_conf(self):
         script = (ROOT / "mailstack.sh").read_text()
